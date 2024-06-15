@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <link href="static/main.css" rel="stylesheet">
+    <title>JENNI MAPS</title>
+    
+    <script src="https://use.fontawesome.com/18642168a3.js"></script>
+</head>
+<body>
+    <section class="barraSuperior">
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-9 col-md-10 col-lg-6 col-lg-offset-4">
+                    <form id="form1" class="form-inline containerFlex">
+                        <div class="form-group">
+                            <label class="sr-only" for="ciudad_inicio">Ciudad de inicio</label>
+                            <div class="input-group widthInput border-shadow">
+                                <label class="input-group-addon addonPersonal"><i class="glyphicon glyphicon-record" aria-hidden="true"></i></label>
+                                <select id="ciudad_inicio" class="form-control">
+                                    {% for ciudad in ciudades %}
+                                        <option value="{{ ciudad }}">{{ ciudad }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="sr-only" for="ciudad_final">Ciudad de fin</label>
+                            <div class="input-group widthInput border-shadow">
+                                <label class="input-group-addon addonPersonal"><i class="glyphicon glyphicon-send" aria-hidden="true"></i></label>
+                                <select id="ciudad_final" class="form-control">
+                                    {% for ciudad in ciudades %}
+                                        <option value="{{ ciudad }}">{{ ciudad }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <button id="obtener-ruta" type="button" class="btn form-control border-shadow">Trazar Ruta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="row border-shadow none" id="tarifa">
+                <span id="textoTarifa"></span>
+            </div>
+        </div>
+    </section>
+    <div id="map"></div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script>
+        let map, directionsService, directionsRenderer;
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 5,
+                center: { lat: 23.6345, lng: -102.5528 }
+            });
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            directionsRenderer.setMap(map);
+        }
+
+        function trazarRuta(coordenadasRuta, nodosIntermedios, distancia) {
+            const waypoints = coordenadasRuta.slice(1, -1).map(coord => ({
+                location: { lat: coord[0], lng: coord[1] },
+                stopover: true
+            }));
+
+            const origen = coordenadasRuta[0];
+            const destino = coordenadasRuta[coordenadasRuta.length - 1];
+
+            const request = {
+                origin: { lat: origen[0], lng: origen[1] },
+                destination: { lat: destino[0], lng: destino[1] },
+                waypoints: waypoints,
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+
+                    let totalDistance = 0;
+                    result.routes[0].legs.forEach(leg => {
+                        totalDistance += leg.distance.value;
+                    });
+                    const distanceInKm = (totalDistance / 1000).toFixed(2);
+
+                    mostrarInfoRuta(nodosIntermedios, distanceInKm);
+                } else {
+                    alert('Error al obtener la ruta: ' + status);
+                }
+            });
+        }
+
+        function mostrarInfoRuta(nodosIntermedios, distancia) {
+            const existingInfoDiv = document.querySelector('.info');
+            if (existingInfoDiv) {
+                existingInfoDiv.remove();
+            }
+
+            const infoDiv = document.createElement('div');
+            infoDiv.classList.add('info');
+
+            const infoText = `<p>Ruta: <span>${nodosIntermedios}</span></p>
+                              <p>Distancia: <span>${distancia}</span> km</p>`;
+
+            infoDiv.innerHTML = infoText;
+            document.getElementById('map').insertAdjacentElement('afterend', infoDiv);
+        }
+
+        function obtenerRuta() {
+            const ciudad_inicio = document.getElementById('ciudad_inicio').value;
+            const ciudad_final = document.getElementById('ciudad_final').value;
+
+            fetch('/get_routes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ start: ciudad_inicio, end: ciudad_final })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    trazarRuta(data.coordenadas_ruta, data.camino, data.distancia);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Hubo un error al obtener la ruta.');
+            });
+        }
+
+        document.getElementById('obtener-ruta').addEventListener('click', obtenerRuta);
+    </script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAX2wrvtx55uXRUDKJGiuqVYWw3enxBSFI&callback=initMap"></script>
+</body>
+</html>
